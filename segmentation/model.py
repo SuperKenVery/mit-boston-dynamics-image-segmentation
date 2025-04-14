@@ -17,6 +17,7 @@ vgg_cfgs: Dict[str, List[Union[str, int]]] = {
     "vgg19": [64, 64, "M", 128, 128, "M", 256, 256, 256, 256, "M", 512, 512, 512, 512, "M", 512, 512, 512, 512, "M"],
     "vgg19s": [64, 64, "M", 128, 128, "M", 256, 256, "S", 256, 256, "M", 512, 512, "S", 512, 512, "M", 256, 256, "S", 256, 256, "M", 40],
     "vgg11s": [64, "M", 128, "M", 256, "S", 256, "M", 512, "S", 512, "M", 256, "S", 256, "M", 40],
+    "vggtiny": [64, "M", 128, "M", 256, "S", 40],
 }
 
 
@@ -48,7 +49,7 @@ class Segmenter(nn.Module):
     We don't aim to 1:1 reproduce the original model, just modify a VGG and see what we get~
 
     Input: (Batch, Channels, Height, Width) RGB image
-    Output: (Batch, Height, Weight, 40)
+    Output: (Batch, 40 (number of classes), Height, Weight)
         Classification and segmentation for the image. For each pixel, it outputs a classification. 39 for objects and 1 for background.
     """
 
@@ -70,7 +71,7 @@ class Segmenter(nn.Module):
         out = self.feature_extractor(x)
         out = F.adaptive_avg_pool2d(out, (H, W))    # (B, 40, H, W)
 
-        return out.permute((0, 2, 3, 1))    # (B, H, W, 40)
+        return out
 
     def _initialize_weights(self) -> None:
         for module in self.modules():
@@ -86,10 +87,10 @@ class Segmenter(nn.Module):
                 nn.init.constant_(module.bias, 0)
 
 if __name__ == '__main__':
-    model = Segmenter().to("mps")
+    model = Segmenter(variant="tiny").to("mps")
 
-    B, H, W = 1, 120, 80
+    B, H, W = 1, 100, 80
     fake_data = torch.randn(B, 3, H, W).to("mps")
     output = model(fake_data)
-    assert output.shape==(B, H, W, 40)
+    assert output.shape==(B, 40, H, W)
     print("Test passed")

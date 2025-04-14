@@ -2,6 +2,7 @@
 /lightning_logs
 /.ropeproject
 __pycache__/
+/checkpoints
 
 # pixi environments
 .pixi

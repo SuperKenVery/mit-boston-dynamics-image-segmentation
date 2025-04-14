@@ -120,7 +120,7 @@ class AmazonPickingChallengeDataset(data.Dataset):
 
         Returns:
             tuple: (image, target) where image is a tensor of shape [C, H, W]
-                  and target is a tensor of shape [H, W, num_classes] for one-hot encoding
+                  and target is a tensor of shape [H, W] with object category index
         """
         if torch.is_tensor(idx):
             idx = idx.long()
@@ -141,15 +141,15 @@ class AmazonPickingChallengeDataset(data.Dataset):
 
         # Create one-hot encoding for the mask
         # If the mask has a positive value, it's the object
-        one_hot = torch.zeros(img_size[0], img_size[1], self.num_classes)
+        target = torch.zeros(mask.shape[0], mask.shape[1], dtype=torch.long)
 
         object_pixels = mask.nonzero()
-        one_hot[object_pixels[0], object_pixels[1], sample.object_idx] = 1
+        target[object_pixels[0], object_pixels[1]] = sample.object_idx
 
-        return img, one_hot
+        return img, target
 
 
-def get_data_loader(root_dir: str = 'data/training',
+def get_data_loader(root_dir: str = 'data/',
                     batch_size: int = 8,
                     num_workers: int = 4,
                     shuffle: bool = True,
@@ -171,6 +171,7 @@ def get_data_loader(root_dir: str = 'data/training',
         root_dir=root_dir,
         locations=locations,
     )
+    assert len(dataset) > 0
 
     data_loader = DataLoader(
         dataset,
@@ -205,7 +206,7 @@ def get_object_classes(root_dir: str = 'data/training',
 # Example usage
 if __name__ == "__main__":
     # Create a data loader
-    loader = get_data_loader(batch_size=4, num_workers=2)
+    loader = get_data_loader(batch_size=1, num_workers=1)
 
     # Get a batch of data
     for batch_idx, (imgs, masks) in enumerate(loader):

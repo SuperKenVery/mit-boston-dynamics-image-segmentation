@@ -14,7 +14,7 @@ from pytorch_lightning.callbacks import ModelCheckpoint, EarlyStopping
 from pytorch_lightning.loggers import TensorBoardLogger
 
 from segmentation.data import get_data_loader, get_object_classes
-from segmentation.model import Segmenter
+from segmentation.model import H, Segmenter
 
 
 class SegmentationModel(pl.LightningModule):
@@ -33,8 +33,8 @@ class SegmentationModel(pl.LightningModule):
 
         # Make sure the model outputs the right number of classes
         test_output = self.model(torch.zeros(1,3,64,64))
-        assert test_output.shape[-1] == num_classes, \
-            f"Model outputs {test_output.shape[-1]} classes (shape {test_output.shape}), expected {num_classes}"
+        assert test_output.shape[1] == num_classes, \
+            f"Model outputs {test_output.shape[1]} classes (shape {test_output.shape}), expected {num_classes}"
 
     def forward(self, x):
         return self.model(x)
@@ -49,27 +49,22 @@ class SegmentationModel(pl.LightningModule):
         return self._common_step(batch, batch_idx, "test")
 
     def _common_step(self, batch, batch_idx, stage):
-        images, masks = batch
+        images, target = batch
+        B, C, H, W = images.shape
 
         # Forward pass
-        outputs = self(images)  # Shape: [B, H, W, C]
-
-        # Convert one-hot masks to class indices for CrossEntropyLoss
-        # Change shape from [B, H, W, C] to [B, C, H, W] for loss calculation
-        outputs = outputs.permute(0, 3, 1, 2)  # [B, C, H, W]
-
-        # Convert one-hot masks [B, H, W, C] to class indices [B, H, W]
-        target_indices = torch.argmax(masks, dim=3)
+        outputs = self(images)  # Shape: [B, Classes, H, W]
 
         # Calculate loss
-        loss = self.loss_fn(outputs, target_indices)
+        loss = self.loss_fn(outputs, target)
 
         # Calculate accuracy
         with torch.no_grad():
             pred_indices = torch.argmax(outputs, dim=1)  # [B, H, W]
-            correct = (pred_indices == target_indices).float().sum()
-            total = torch.numel(target_indices)
-            accuracy = correct / total
+            image_classification = torch.mode(outputs.reshape(B, H * W), dim=1)[0]   # [B]
+            gt_classification = torch.mode(target.reshape(B, H * W), dim=1)[0]   # [B, H, W] -> [B]
+            correct = (image_classification == gt_classification).float().sum()
+            accuracy = correct / B
 
         # Log metrics
         self.log(f"{stage}_loss", loss, prog_bar=True)

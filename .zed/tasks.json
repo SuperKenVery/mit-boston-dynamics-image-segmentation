@@ -1,0 +1,9 @@
+// Static tasks configuration.
+//
+// Example:
+[
+  {
+    "label": "Train model",
+    "command": "pixi run python -m segmentation --num-workers 1 --batch-size 1 --model-variant tiny"
+  }
+]
