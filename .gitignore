@@ -1,4 +1,7 @@
 /data
+/lightning_logs
+/.ropeproject
+__pycache__/
 
 # pixi environments
 .pixi
