@@ -14,7 +14,7 @@ from pytorch_lightning.callbacks import ModelCheckpoint, EarlyStopping
 from pytorch_lightning.loggers import TensorBoardLogger
 
 from segmentation.data import get_data_loader, get_object_classes
-from segmentation.model import H, Segmenter
+from segmentation.model import Segmenter
 
 
 class SegmentationModel(pl.LightningModule):
@@ -61,7 +61,7 @@ class SegmentationModel(pl.LightningModule):
         # Calculate accuracy
         with torch.no_grad():
             pred_indices = torch.argmax(outputs, dim=1)  # [B, H, W]
-            image_classification = torch.mode(outputs.reshape(B, H * W), dim=1)[0]   # [B]
+            image_classification = torch.mode(pred_indices.reshape(B, H * W), dim=1)[0]   # [B]
             gt_classification = torch.mode(target.reshape(B, H * W), dim=1)[0]   # [B, H, W] -> [B]
             correct = (image_classification == gt_classification).float().sum()
             accuracy = correct / B

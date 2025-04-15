@@ -16,7 +16,8 @@ vgg_cfgs: Dict[str, List[Union[str, int]]] = {
     "vgg16": [64, 64, "M", 128, 128, "M", 256, 256, 256, "M", 512, 512, 512, "M", 512, 512, 512, "M"],
     "vgg19": [64, 64, "M", 128, 128, "M", 256, 256, 256, 256, "M", 512, 512, 512, 512, "M", 512, 512, 512, 512, "M"],
     "vgg19s": [64, 64, "M", 128, 128, "M", 256, 256, "S", 256, 256, "M", 512, 512, "S", 512, 512, "M", 256, 256, "S", 256, 256, "M", 40],
-    "vgg11s": [64, "M", 128, "M", 256, "S", 256, "M", 512, "S", 512, "M", 256, "S", 256, "M", 40],
+    "vgg11s": [64, "M", 128, "M", 256, "S", 256, "M", 512, "M", 512, "S", 40],
+    "vgg11ss": [64, "M", 128, "M", 256, "S", 256, "M", 256, "M", 256, "S", 40],
     "vggtiny": [64, "M", 128, "M", 256, "S", 40],
 }
 
@@ -69,6 +70,7 @@ class Segmenter(nn.Module):
         B, C, H, W = x.shape
 
         out = self.feature_extractor(x)
+        # print(out.shape)
         out = F.adaptive_avg_pool2d(out, (H, W))    # (B, 40, H, W)
 
         return out
@@ -87,7 +89,7 @@ class Segmenter(nn.Module):
                 nn.init.constant_(module.bias, 0)
 
 if __name__ == '__main__':
-    model = Segmenter(variant="tiny").to("mps")
+    model = Segmenter(variant="11ss").to("mps")
 
     B, H, W = 1, 100, 80
     fake_data = torch.randn(B, 3, H, W).to("mps")
