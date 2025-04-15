@@ -2,9 +2,10 @@
 
 import os
 import argparse
-from typing import Dict, Any, Optional, Tuple, Union, Literal
-
+from typing import Dict, Any, Optional, Tuple, Union, Literal, cast
+import torchvision
 from pytorch_lightning.utilities.types import OptimizerConfig, OptimizerLRSchedulerConfig
+from lightning.pytorch.loggers import WandbLogger
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
@@ -12,7 +13,6 @@ import torch.optim as optim
 import pytorch_lightning as pl
 from pytorch_lightning.callbacks import ModelCheckpoint, EarlyStopping
 from pytorch_lightning.loggers import TensorBoardLogger
-
 from segmentation.data import get_data_loader, get_object_classes
 from segmentation.model import Segmenter
 
@@ -66,9 +66,19 @@ class SegmentationModel(pl.LightningModule):
             correct = (image_classification == gt_classification).float().sum()
             accuracy = correct / B
 
+            if batch_idx % 20 == 0:
+                predicted_class = image_classification[0]
+                logger = cast(WandbLogger, self.logger)
+
+                logger.log_image(key=f"{stage}/mask_predict", images=[outputs[0:1, predicted_class, :, :]])
+                logger.log_image(key=f"{stage}/mask_label", images=[target[0:1, :, :] / target[0].max()])
+                logger.log_image(key=f"{stage}/input_img", images=[images[0:1]])
+
         # Log metrics
-        self.log(f"{stage}_loss", loss, prog_bar=True)
-        self.log(f"{stage}_accuracy", accuracy, prog_bar=True)
+        self.log(f"{stage}/loss", loss, prog_bar=True)
+        self.log(f"{stage}/accuracy", accuracy, prog_bar=True)
+
+
 
         return {"loss": loss, "accuracy": accuracy}
 
@@ -92,7 +102,7 @@ class SegmentationModel(pl.LightningModule):
             "optimizer": optimizer,
             "lr_scheduler": {
                 "scheduler": scheduler,
-                "monitor": "val_loss",
+                "monitor": "val/loss",
                 "interval": "epoch",
                 "frequency": 1
             }
@@ -101,6 +111,7 @@ class SegmentationModel(pl.LightningModule):
 
 def train(
     data_dir: str = "data/training",
+    load_ckpt: bool = True,
     batch_size: int = 8,
     num_workers: int = 4,
     learning_rate: float = 1e-4,
@@ -160,15 +171,15 @@ def train(
     # Create callbacks
     checkpoint_callback = ModelCheckpoint(
         dirpath=checkpoint_dir,
-        filename="segmentation-{epoch:02d}-{val_loss:.2f}",
-        monitor="val_loss",
+        filename="segmentation-{epoch:02d}-{val/loss:.2f}",
+        monitor="val/loss",
         mode="min",
         save_top_k=3,
         save_last=True,
     )
 
     early_stop_callback = EarlyStopping(
-        monitor="val_loss",
+        monitor="val/loss",
         min_delta=0.00,
         patience=patience,
         verbose=True,
@@ -176,7 +187,7 @@ def train(
     )
 
     # Create logger
-    logger = TensorBoardLogger("lightning_logs", name="segmentation")
+    logger = WandbLogger(project="segmentation")
 
     # Determine accelerator
     accelerator = None
@@ -199,7 +210,7 @@ def train(
     )
 
     # Train model
-    trainer.fit(model, train_loader, val_loader)
+    trainer.fit(model, train_loader, val_loader, ckpt_path="last" if load_ckpt else None)
 
     return model, trainer
 
@@ -207,6 +218,7 @@ def train(
 def main():
     parser = argparse.ArgumentParser(description="Train segmentation model")
     parser.add_argument("--data-dir", type=str, default="data", help="Path to the dataset")
+    parser.add_argument("--load-ckpt", type=bool, default=True, action=argparse.BooleanOptionalAction, help="Whether to load from checkpoint")
     parser.add_argument("--batch-size", type=int, default=8, help="Batch size for training")
     parser.add_argument("--num-workers", type=int, default=4, help="Number of workers for data loading")
     parser.add_argument("--learning-rate", type=float, default=1e-4, help="Learning rate for the optimizer")
@@ -222,6 +234,7 @@ def main():
 
     train(
         data_dir=args.data_dir,
+        load_ckpt=args.load_ckpt,
         batch_size=args.batch_size,
         num_workers=args.num_workers,
         learning_rate=args.learning_rate,

@@ -3,6 +3,7 @@
 /.ropeproject
 __pycache__/
 /checkpoints
+/wandb
 
 # pixi environments
 .pixi
